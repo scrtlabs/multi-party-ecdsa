@@ -15,9 +15,11 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2018::party_i::{
     SharedKeys, SignBroadcastPhase1, SignDecommitPhase1, SignKeys,
 };
 use multi_party_ecdsa::utilities::mta::*;
+use serde::{Deserialize, Serialize};
 
 use paillier::EncryptionKey;
 use reqwest::Client;
+use std::fmt;
 use std::{env, fs, time};
 
 mod common;
@@ -133,7 +135,7 @@ fn main() {
     for i in 1..THRESHOLD + 2 {
         if i == party_num_int {
             bc1_vec.push(com.clone());
-        //   m_a_vec.push(m_a_k.clone());
+            //   m_a_vec.push(m_a_k.clone());
         } else {
             //     if signers_vec.contains(&(i as usize)) {
             let (bc1_j, m_a_party_j): (SignBroadcastPhase1, MessageA) =
@@ -497,18 +499,37 @@ fn main() {
     println!("s: {:?} \n", sig.s.get_element());
     println!("recid: {:?} \n", sig.recid.clone());
 
-    let sign_json = serde_json::to_string(&(
-        "r",
-        (BigInt::from_bytes(&(sig.r.get_element())[..])).to_str_radix(16),
-        "s",
-        (BigInt::from_bytes(&(sig.s.get_element())[..])).to_str_radix(16),
-    ))
-    .unwrap();
+    let sig_file = SignatureFile {
+        r: (BigInt::from_bytes(&(sig.r.get_element())[..])).to_str_radix(16),
+        s: (BigInt::from_bytes(&(sig.s.get_element())[..])).to_str_radix(16),
+        recid: sig.recid.clone(),
+    };
+
+    let sign_json = serde_json::to_string(&sig_file).unwrap();
 
     // check sig against secp256k1
     check_sig(&sig.r, &sig.s, &message_bn, &y_sum);
 
+    print!("vrs:{}", sig_file.to_string());
+
     fs::write("signature".to_string(), sign_json).expect("Unable to save !");
+}
+
+#[derive(Serialize, Deserialize)]
+struct SignatureFile {
+    r: String,
+    s: String,
+    recid: u8,
+}
+
+impl fmt::Display for SignatureFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{\"r\":\"{}\", \"s\":\"{}\", \"v\":\"{}\"}}",
+            self.r, self.s, self.recid
+        )
+    }
 }
 
 fn format_vec_from_reads<'a, T: serde::Deserialize<'a> + Clone>(
